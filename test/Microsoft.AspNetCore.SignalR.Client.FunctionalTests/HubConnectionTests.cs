@@ -104,6 +104,78 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
 
         [Theory]
         [MemberData(nameof(HubProtocolsAndTransportsAndHubPaths))]
+        public async Task CanStopAndStartConnection(IHubProtocol protocol, TransportType transportType, string path)
+        {
+            using (StartLog(out var loggerFactory))
+            {
+                const string originalMessage = "SignalR";
+                var httpConnection = new HttpConnection(new Uri(_serverFixture.Url + path), transportType, loggerFactory);
+                var connection = new HubConnection(httpConnection, protocol, loggerFactory);
+                try
+                {
+                    await connection.StartAsync().OrTimeout();
+                    var result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
+                    Assert.Equal(originalMessage, result);
+                    await connection.StopAsync();
+                    await connection.StartAsync();
+                    result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
+                    Assert.Equal(originalMessage, result);
+                }
+                catch (Exception ex)
+                {
+                    loggerFactory.CreateLogger<HubConnectionTests>().LogError(ex, "Exception from test");
+                    throw;
+                }
+                finally
+                {
+                    await connection.DisposeAsync().OrTimeout();
+                }
+            }
+        }
+
+        [Fact]
+        public async Task CanStartConnectionFromClosedEvent()
+        {
+            using (StartLog(out var loggerFactory))
+            {
+                const string originalMessage = "SignalR";
+                var httpConnection = new HttpConnection(new Uri(_serverFixture.Url + "/default"));
+                var connection = new HubConnection(httpConnection, new JsonHubProtocol(), loggerFactory);
+                var restartTcs = new TaskCompletionSource<object>();
+                connection.Closed += async e =>
+                {
+                    if (!restartTcs.Task.IsCompleted)
+                    {
+                        await connection.StartAsync();
+                        restartTcs.SetResult(null);
+                    }
+                };
+
+                try
+                {
+                    await connection.StartAsync().OrTimeout();
+                    var result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
+                    Assert.Equal(originalMessage, result);
+                    await connection.StopAsync();
+                    await restartTcs.Task;
+                    result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
+                    Assert.Equal(originalMessage, result);
+
+                }
+                catch (Exception ex)
+                {
+                    loggerFactory.CreateLogger<HubConnectionTests>().LogError(ex, "Exception from test");
+                    throw;
+                }
+                finally
+                {
+                    await connection.DisposeAsync().OrTimeout();
+                }
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(HubProtocolsAndTransportsAndHubPaths))]
         public async Task MethodsAreCaseInsensitive(IHubProtocol protocol, TransportType transportType, string path)
         {
             using (StartLog(out var loggerFactory, $"{nameof(MethodsAreCaseInsensitive)}_{protocol.Name}_{transportType}_{path.TrimStart('/')}"))
@@ -173,12 +245,25 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
             {
                 var httpConnection = new HttpConnection(new Uri(_serverFixture.Url + path), transportType, loggerFactory);
                 var connection = new HubConnection(httpConnection, protocol, loggerFactory);
+                var closeTcs = new TaskCompletionSource<object>();
+                connection.Closed += e =>
+                {
+                    if (e != null)
+                    {
+                        closeTcs.SetException(e);
+                    }
+                    else
+                    {
+                        closeTcs.SetResult(null);
+                    }
+                };
+
                 try
                 {
                     await connection.StartAsync().OrTimeout();
                     await connection.InvokeAsync("CallHandlerThatDoesntExist").OrTimeout();
                     await connection.DisposeAsync().OrTimeout();
-                    await connection.Closed.OrTimeout();
+                    await closeTcs.Task.OrTimeout();
                 }
                 finally
                 {

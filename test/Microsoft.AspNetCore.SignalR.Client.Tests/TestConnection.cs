@@ -30,9 +30,8 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
         private Task _receiveLoop;
 
         private TransferMode? _transferMode;
-        private readonly TaskCompletionSource<object> _closeTcs = new TaskCompletionSource<object>();
 
-        public Task Closed => _closeTcs.Task;
+        public event Action<Exception> Closed;
         public Task Started => _started.Task;
         public Task Disposed => _disposed.Task;
         public ChannelReader<byte[]> SentMessages => _sentMessages.Reader;
@@ -51,16 +50,19 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
         public Task AbortAsync(Exception ex) => DisposeCoreAsync(ex);
         public Task DisposeAsync() => DisposeCoreAsync();
 
+        public Task StopAsync()
+        {
+            return Task.FromException(new NotSupportedException());
+        }
+
         private Task DisposeCoreAsync(Exception ex = null)
         {
             if (ex == null)
             {
-                _closeTcs.TrySetResult(null);
                 _disposed.TrySetResult(null);
             }
             else
             {
-                _closeTcs.TrySetException(ex);
                 _disposed.TrySetException(ex);
             }
 
@@ -147,16 +149,16 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
                         }
                     }
                 }
-                _closeTcs.TrySetResult(null);
+                Closed(null);
             }
             catch (OperationCanceledException)
             {
                 // Do nothing, we were just asked to shut down.
-                _closeTcs.TrySetResult(null);
+                Closed(null);
             }
             catch (Exception ex)
             {
-                _closeTcs.TrySetException(ex);
+                Closed(ex);
             }
         }
 

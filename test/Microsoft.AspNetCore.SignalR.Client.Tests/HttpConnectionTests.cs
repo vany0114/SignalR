@@ -66,7 +66,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 var exception =
                     await Assert.ThrowsAsync<InvalidOperationException>(
                         async () => await connection.StartAsync());
-                Assert.Equal("Cannot start a connection that is not in the Initial state.", exception.Message);
+                Assert.Equal("Cannot start a connection that is not in the Disconnected state.", exception.Message);
             }
             finally
             {
@@ -75,7 +75,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
         }
 
         [Fact]
-        public async Task CannotStartStoppedConnection()
+        public async Task CannotStartConnectionDisposedAfterStarting()
         {
             var mockHttpHandler = new Mock<HttpMessageHandler>();
             mockHttpHandler.Protected()
@@ -97,7 +97,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 await Assert.ThrowsAsync<InvalidOperationException>(
                     async () => await connection.StartAsync());
 
-            Assert.Equal("Cannot start a connection that is not in the Initial state.", exception.Message);
+            Assert.Equal("Cannot start a connection that is not in the Disconnected state.", exception.Message);
         }
 
         [Fact]
@@ -111,12 +111,12 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                     await Assert.ThrowsAsync<InvalidOperationException>(
                         async () => await connection.StartAsync());
 
-                Assert.Equal("Cannot start a connection that is not in the Initial state.", exception.Message);
+                Assert.Equal("Cannot start a connection that is not in the Disconnected state.", exception.Message);
             }
         }
 
         [Fact]
-        public async Task CanStopStartingConnection()
+        public async Task CanDisposeStartingConnection()
         {
             // Used to make sure StartAsync is not completed before DisposeAsync is called
             var releaseNegotiateTcs = new TaskCompletionSource<object>();
@@ -156,6 +156,217 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
             await disposeTask.OrTimeout();
 
             transport.Verify(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>(), It.IsAny<IConnection>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task CanStartConnectionThatFailedToStart()
+        {
+            var failNegotiate = true;
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+
+                    if (IsNegotiateRequest(request))
+                    {
+                        return failNegotiate
+                            ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
+                            : ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
+                    }
+
+                    return ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            try
+            {
+                await connection.StartAsync().OrTimeout();
+            }
+            catch { }
+            failNegotiate = false;
+            await connection.StartAsync().OrTimeout();
+            await connection.DisposeAsync().OrTimeout();
+        }
+
+
+        [Fact]
+        public async Task CanStartStoppedConnection()
+        {
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+                    return IsNegotiateRequest(request)
+                        ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
+                        : ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            await connection.StartAsync().OrTimeout();
+            await connection.StopAsync().OrTimeout();
+            await connection.StartAsync().OrTimeout();
+            await connection.DisposeAsync().OrTimeout();
+        }
+
+        [Fact]
+        public async Task CanStopStartingConnection()
+        {
+            var allowStopTcs = new TaskCompletionSource<object>();
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+                    if (IsNegotiateRequest(request))
+                    {
+                        allowStopTcs.SetResult(null);
+                        return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
+                    }
+                    else
+                    {
+                        var content = request.Content != null ? await request.Content.ReadAsByteArrayAsync() : null;
+                        return (content?.Length == 1 && content[0] == 0x42)
+                            ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
+                            : ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                    }
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            var closeTcs = new TaskCompletionSource<object>();
+            connection.Closed += e => closeTcs.TrySetResult(null);
+
+            var startTask = connection.StartAsync();
+            await allowStopTcs.Task;
+
+            await Task.WhenAll(startTask.OrTimeout(), connection.StopAsync().OrTimeout());
+            await closeTcs.Task.OrTimeout();
+        }
+
+        [Fact]
+        public async Task CanStartConnectionStoppedWithError()
+        {
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+                    if (IsNegotiateRequest(request))
+                    {
+                        return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
+                    }
+
+                    var content = request.Content != null ? await request.Content.ReadAsByteArrayAsync() : null;
+                    return (content?.Length == 1 && content[0] == 0x42)
+                        ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
+                        : ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            var closeTcs = new TaskCompletionSource<object>();
+            connection.Closed += e => closeTcs.TrySetResult(null);
+
+            await connection.StartAsync().OrTimeout();
+            try
+            {
+                await connection.SendAsync(new byte[] { 0x42 }).OrTimeout();
+            }
+            catch { }
+            await closeTcs.Task.OrTimeout().OrTimeout();
+            await connection.StartAsync().OrTimeout();
+            await connection.DisposeAsync().OrTimeout();
+        }
+
+        [Fact]
+        public async Task CanStopStoppedConnection()
+        {
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"));
+            await connection.StopAsync().OrTimeout();
+            await connection.DisposeAsync().OrTimeout();
+        }
+
+        [Fact]
+        public async Task StoppingStoppingConnectionNoOps()
+        {
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+                    if (IsNegotiateRequest(request))
+                    {
+                        return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
+                    }
+                    else
+                    {
+                        var content = request.Content != null ? await request.Content.ReadAsByteArrayAsync() : null;
+                        return (content?.Length == 1 && content[0] == 0x42)
+                            ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
+                            : ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                    }
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            var closeTcs = new TaskCompletionSource<object>();
+            connection.Closed += e => closeTcs.TrySetResult(null);
+
+            await connection.StartAsync().OrTimeout();
+            await Task.WhenAll(connection.StopAsync().OrTimeout(), connection.StopAsync().OrTimeout());
+            await closeTcs.Task.OrTimeout();
+        }
+
+        [Fact]
+        public async Task DisposedStoppingConnectionDisposesConnection()
+        {
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+                    if (IsNegotiateRequest(request))
+                    {
+                        return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
+                    }
+                    else
+                    {
+                        var content = request.Content != null ? await request.Content.ReadAsByteArrayAsync() : null;
+                        return (content?.Length == 1 && content[0] == 0x42)
+                            ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
+                            : ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                    }
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            var closeTcs = new TaskCompletionSource<object>();
+            connection.Closed += e => closeTcs.TrySetResult(null);
+
+            await connection.StartAsync().OrTimeout();
+            await Task.WhenAll(connection.StopAsync().OrTimeout(), connection.DisposeAsync().OrTimeout());
+            await closeTcs.Task.OrTimeout();
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.StartAsync());
+            Assert.Equal("Cannot start a connection that is not in the Disconnected state.", exception.Message);
         }
 
         [Fact]
@@ -209,11 +420,21 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
             var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
                 httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
 
-
+            var closeTcs = new TaskCompletionSource<object>();
+            connection.Closed += e =>
+            {
+                if (e != null)
+                {
+                    closeTcs.SetException(e);
+                }
+                else
+                {
+                    closeTcs.SetResult(null);
+                }
+            };
             await connection.StartAsync().OrTimeout();
             await connection.DisposeAsync().OrTimeout();
-            await connection.Closed.OrTimeout();
-            // in case of clean disconnect error should be null
+            await closeTcs.Task.OrTimeout();
         }
 
         [Fact]
@@ -235,11 +456,23 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
 
             var connection = new HttpConnection(new Uri("http://fakeuri.org/"), TransportType.LongPolling, loggerFactory: null,
                 httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+            var closeTcs = new TaskCompletionSource<object>();
+            connection.Closed += e =>
+            {
+                if (e != null)
+                {
+                    closeTcs.SetException(e);
+                }
+                else
+                {
+                    closeTcs.SetResult(null);
+                }
+            };
 
             try
             {
                 await connection.StartAsync().OrTimeout();
-                await Assert.ThrowsAsync<HttpRequestException>(() => connection.Closed.OrTimeout());
+                await Assert.ThrowsAsync<HttpRequestException>(() => closeTcs.Task.OrTimeout());
             }
             finally
             {
@@ -449,9 +682,10 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
         public async Task ClosedEventNotRaisedWhenTheClientIsStoppedButWasNeverStarted()
         {
             var connection = new HttpConnection(new Uri("http://fakeuri.org/"));
-
+            var closeInvoked = false;
+            connection.Closed += e => closeInvoked = true;
             await connection.DisposeAsync();
-            Assert.False(connection.Closed.IsCompleted);
+            Assert.False(closeInvoked);
         }
 
         [Fact]
@@ -635,18 +869,17 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                     return Task.CompletedTask;
                 }, receiveTcs);
 
-                _ = connection.Closed.ContinueWith(task =>
+                connection.Closed += e =>
                 {
-                    if (task.Exception != null)
+                    if (e != null)
                     {
-                        receiveTcs.TrySetException(task.Exception);
+                        receiveTcs.TrySetException(e);
                     }
                     else
                     {
                         receiveTcs.TrySetCanceled();
                     }
-                    return Task.CompletedTask;
-                });
+                };
 
                 await connection.StartAsync().OrTimeout();
                 Assert.Equal("42", await receiveTcs.Task.OrTimeout());
@@ -698,18 +931,17 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                     return Task.CompletedTask;
                 });
 
-                _ = connection.Closed.ContinueWith(task =>
+                connection.Closed += e =>
                 {
-                    if (task.Exception != null)
+                    if (e != null)
                     {
-                        receiveTcs.TrySetException(task.Exception);
+                        receiveTcs.TrySetException(e);
                     }
                     else
                     {
                         receiveTcs.TrySetCanceled();
                     }
-                    return Task.CompletedTask;
-                });
+                };
 
                 await connection.StartAsync();
 
@@ -762,18 +994,17 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                     return Task.CompletedTask;
                 });
 
-                _ = connection.Closed.ContinueWith(task =>
+                connection.Closed += e =>
                 {
-                    if (task.Exception != null)
+                    if (e != null)
                     {
-                        receiveTcs.TrySetException(task.Exception);
+                        receiveTcs.TrySetException(e);
                     }
                     else
                     {
                         receiveTcs.TrySetCanceled();
                     }
-                    return Task.CompletedTask;
-                });
+                };
 
                 await connection.StartAsync();
 
@@ -806,12 +1037,21 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
             try
             {
+                var closeTcs = new TaskCompletionSource<object>();
+                connection.Closed += e =>
+                {
+                    if (e != null)
+                    {
+                        closeTcs.SetException(e);
+                    }
+                    else
+                    {
+                        closeTcs.SetResult(null);
+                    }
+                };
 
                 await connection.StartAsync().OrTimeout();
-
-                // Exception in send should shutdown the connection
-                await Assert.ThrowsAsync<HttpRequestException>(() => connection.Closed.OrTimeout());
-
+                await Assert.ThrowsAsync<HttpRequestException>(() => closeTcs.Task.OrTimeout());
                 var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.SendAsync(new byte[0]));
 
                 Assert.Equal("Cannot send messages when the connection is not in the Connected state.", exception.Message);
@@ -976,6 +1216,33 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
             await connection.StartAsync().OrTimeout();
             await connection.DisposeAsync().OrTimeout();
+        }
+
+        [Fact]
+        public async Task AbortAsyncTriggersClosedWithProvidedException()
+        {
+            var mockHttpHandler = new Mock<HttpMessageHandler>();
+            mockHttpHandler.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                {
+                    await Task.Yield();
+                    return IsNegotiateRequest(request)
+                        ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
+                        : ResponseUtils.CreateResponse(HttpStatusCode.OK);
+                });
+
+            var connection = new HttpConnection(new Uri("http://fakeuri.org"), TransportType.LongPolling, loggerFactory: null,
+                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
+
+            var closeTcs = new TaskCompletionSource<Exception>();
+            connection.Closed += ex => closeTcs.TrySetResult(ex);
+
+            await connection.StartAsync().OrTimeout();
+
+            var exception = new Exception("Whoops!");
+            await connection.AbortAsync(exception).OrTimeout();
+            Assert.Same(exception, await closeTcs.Task.OrTimeout());
         }
 
         private bool IsNegotiateRequest(HttpRequestMessage request)
