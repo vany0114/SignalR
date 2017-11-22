@@ -433,6 +433,8 @@ namespace Microsoft.AspNetCore.Sockets
                     return;
                 }
             }
+
+            context.Response.ContentType = "text/plain";
         }
 
         private async Task<bool> EnsureConnectionStateAsync(DefaultConnectionContext connection, HttpContext context, TransportType transportType, TransportType supportedTransports, ConnectionLogScope logScope)
