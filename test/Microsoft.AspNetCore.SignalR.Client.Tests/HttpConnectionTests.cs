@@ -192,7 +192,6 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
             await connection.DisposeAsync().OrTimeout();
         }
 
-
         [Fact]
         public async Task CanStartStoppedConnection()
         {
@@ -247,14 +246,14 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
             connection.Closed += e => closeTcs.TrySetResult(null);
 
             var startTask = connection.StartAsync();
-            await allowStopTcs.Task;
+            await allowStopTcs.Task.OrTimeout();
 
-            await Task.WhenAll(startTask.OrTimeout(), connection.StopAsync().OrTimeout());
+            await Task.WhenAll(startTask, connection.StopAsync()).OrTimeout();
             await closeTcs.Task.OrTimeout();
         }
 
         [Fact]
-        public async Task CanStartConnectionStoppedWithError()
+        public async Task CanStartConnectionAfterConnectionStoppedWithError()
         {
             var mockHttpHandler = new Mock<HttpMessageHandler>();
             mockHttpHandler.Protected()
@@ -285,7 +284,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 await connection.SendAsync(new byte[] { 0x42 }).OrTimeout();
             }
             catch { }
-            await closeTcs.Task.OrTimeout().OrTimeout();
+            await closeTcs.Task.OrTimeout();
             await connection.StartAsync().OrTimeout();
             await connection.DisposeAsync().OrTimeout();
         }
@@ -293,8 +292,6 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
         [Fact]
         public async Task CanStopStoppedConnection()
         {
-            var mockHttpHandler = new Mock<HttpMessageHandler>();
-
             var connection = new HttpConnection(new Uri("http://fakeuri.org/"));
             await connection.StopAsync().OrTimeout();
             await connection.DisposeAsync().OrTimeout();

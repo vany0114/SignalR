@@ -109,7 +109,7 @@ namespace Microsoft.AspNetCore.Sockets.Client
             if (ChangeState(from: ConnectionState.Disconnected, to: ConnectionState.Connecting) != ConnectionState.Disconnected)
             {
                 return Task.FromException(
-                    new InvalidOperationException("Cannot start a connection that is not in the Disconnected state."));
+                    new InvalidOperationException($"Cannot start a connection that is not in the {nameof(ConnectionState.Disconnected)} state."));
             }
 
             _startTcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -121,13 +121,11 @@ namespace Microsoft.AspNetCore.Sockets.Client
                     var abortException = _abortException;
                     if (t.IsFaulted || abortException != null)
                     {
-                        _startTcs.SetException(abortException ?? t.Exception.InnerException);
-                        Closed?.Invoke(abortException ?? t.Exception);
+                        _startTcs.SetException(_abortException ?? t.Exception.InnerException);
                     }
                     else if (t.IsCanceled)
                     {
                         _startTcs.SetCanceled();
-                        Closed?.Invoke(t.Exception);
                     }
                     else
                     {
@@ -210,10 +208,6 @@ namespace Microsoft.AspNetCore.Sockets.Client
                     if (t.IsFaulted)
                     {
                         Closed?.Invoke(t.Exception.InnerException);
-                    }
-                    else if (t.IsCanceled)
-                    {
-                        Closed?.Invoke(t.Exception);
                     }
                     else
                     {
@@ -451,7 +445,7 @@ namespace Microsoft.AspNetCore.Sockets.Client
 
         public async Task StopAsync()
         {
-            lock(_stateChangeLock)
+            lock (_stateChangeLock)
             {
                 if (!(_connectionState == ConnectionState.Connecting || _connectionState == ConnectionState.Connected))
                 {
@@ -572,7 +566,7 @@ namespace Microsoft.AspNetCore.Sockets.Client
 
         private ConnectionState ChangeState(ConnectionState from, ConnectionState to)
         {
-            lock(_stateChangeLock)
+            lock (_stateChangeLock)
             {
                 var state = _connectionState;
                 if (_connectionState == from)

@@ -116,8 +116,8 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
                     await connection.StartAsync().OrTimeout();
                     var result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
                     Assert.Equal(originalMessage, result);
-                    await connection.StopAsync();
-                    await connection.StartAsync();
+                    await connection.StopAsync().OrTimeout();
+                    await connection.StartAsync().OrTimeout();
                     result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
                     Assert.Equal(originalMessage, result);
                 }
@@ -139,7 +139,7 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
             using (StartLog(out var loggerFactory))
             {
                 const string originalMessage = "SignalR";
-                var httpConnection = new HttpConnection(new Uri(_serverFixture.Url + "/default"));
+                var httpConnection = new HttpConnection(new Uri(_serverFixture.Url + "/default"), loggerFactory);
                 var connection = new HubConnection(httpConnection, new JsonHubProtocol(), loggerFactory);
                 var restartTcs = new TaskCompletionSource<object>();
                 connection.Closed += async e =>
@@ -156,8 +156,8 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
                     await connection.StartAsync().OrTimeout();
                     var result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
                     Assert.Equal(originalMessage, result);
-                    await connection.StopAsync();
-                    await restartTcs.Task;
+                    await connection.StopAsync().OrTimeout();
+                    await restartTcs.Task.OrTimeout();
                     result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
                     Assert.Equal(originalMessage, result);
 

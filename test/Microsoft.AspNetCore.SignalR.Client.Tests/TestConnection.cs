@@ -149,16 +149,16 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
                         }
                     }
                 }
-                Closed(null);
+                Closed?.Invoke(null);
             }
             catch (OperationCanceledException)
             {
                 // Do nothing, we were just asked to shut down.
-                Closed(null);
+                Closed?.Invoke(null);
             }
             catch (Exception ex)
             {
-                Closed(ex);
+                Closed?.Invoke(ex);
             }
         }
 
