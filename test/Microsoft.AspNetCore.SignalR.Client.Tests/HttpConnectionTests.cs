@@ -290,7 +290,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
         }
 
         [Fact]
-        public async Task CanStopStoppedConnection()
+        public async Task CanDisposeStoppedConnection()
         {
             var connection = new HttpConnection(new Uri("http://fakeuri.org/"));
             await connection.StopAsync().OrTimeout();

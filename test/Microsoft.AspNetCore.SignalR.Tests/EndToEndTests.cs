@@ -353,7 +353,7 @@ namespace Microsoft.AspNetCore.SignalR.Tests
                     logger.LogInformation("Starting connection to {url}", url);
                     await connection.StartAsync().OrTimeout();
 
-                    await closeTcs.Task;
+                    await closeTcs.Task.OrTimeout();
                 }
                 catch (Exception ex)
                 {

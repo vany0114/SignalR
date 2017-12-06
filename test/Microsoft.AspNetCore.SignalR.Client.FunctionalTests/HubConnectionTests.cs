@@ -146,7 +146,7 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
                 {
                     if (!restartTcs.Task.IsCompleted)
                     {
-                        await connection.StartAsync();
+                        await connection.StartAsync().OrTimeout();
                         restartTcs.SetResult(null);
                     }
                 };
