@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -625,21 +626,27 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 mockTransport.SetupGet(t => t.Mode).Returns(TransferMode.Text);
 
                 var blockReceiveCallbackTcs = new TaskCompletionSource<object>();
+                var onReceivedCalledTcs = new TaskCompletionSource<object>();
 
                 var connection = new HttpConnection(new Uri("http://fakeuri.org/"), new TestTransportFactory(mockTransport.Object), loggerFactory,
                     httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
-                connection.OnReceived(_ => blockReceiveCallbackTcs.Task);
+                connection.OnReceived(async _ =>
+                {
+                    onReceivedCalledTcs.TrySetResult(null);
+                    await blockReceiveCallbackTcs.Task;
+                });
 
                 logger.LogInformation("Starting connection");
                 await connection.StartAsync().OrTimeout();
                 logger.LogInformation("Started connection");
                 channel.Writer.TryWrite(Array.Empty<byte>());
+                await onReceivedCalledTcs.Task.OrTimeout();
 
                 // Ensure that SignalR isn't blocked by the receive callback
                 Assert.False(channel.Reader.TryRead(out var message));
 
                 logger.LogInformation("Disposing connection");
-                await connection.DisposeAsync().OrTimeout();
+                await connection.DisposeAsync().OrTimeout(TimeSpan.FromSeconds(10));
                 logger.LogInformation("Disposed connection");
             }
         }

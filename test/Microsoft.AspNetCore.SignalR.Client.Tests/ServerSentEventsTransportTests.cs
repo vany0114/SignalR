@@ -86,7 +86,7 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
                             var buffer = Encoding.ASCII.GetBytes("data: 3:abc\r\n\r\n");
                             while (!eventStreamCts.IsCancellationRequested)
                             {
-                                await stream.WriteAsync(buffer, 0, buffer.Length);
+                                await stream.WriteAsync(buffer, 0, buffer.Length).OrTimeout();
                             }
                         });
                     mockStream.Setup(s => s.CanRead).Returns(true);

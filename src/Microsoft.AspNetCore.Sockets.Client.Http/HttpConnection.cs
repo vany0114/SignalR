@@ -193,7 +193,6 @@ namespace Microsoft.AspNetCore.Sockets.Client
                     await _receiveLoopTask;
 
                     _logger.DrainEvents(_connectionId);
-                    await _eventQueue.Drain();
 
                     await Task.WhenAny(_eventQueue.Drain().NoThrow(), Task.Delay(_eventQueueDrainTimeout));
 
