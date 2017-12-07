@@ -371,12 +371,12 @@ namespace Microsoft.AspNetCore.SignalR.Client
             }
         }
 
-        private void Shutdown(Exception ex = null)
+        private void Shutdown(Exception exception = null)
         {
             _logger.ShutdownConnection();
-            if (ex != null)
+            if (exception != null)
             {
-                _logger.ShutdownWithError(ex);
+                _logger.ShutdownWithError(exception);
             }
 
             lock (_pendingCallsLock)
@@ -389,9 +389,9 @@ namespace Microsoft.AspNetCore.SignalR.Client
                 foreach (var outstandingCall in _pendingCalls.Values)
                 {
                     _logger.RemoveInvocation(outstandingCall.InvocationId);
-                    if (ex != null)
+                    if (exception != null)
                     {
-                        outstandingCall.Fail(ex);
+                        outstandingCall.Fail(exception);
                     }
                     outstandingCall.Dispose();
                 }
@@ -400,7 +400,7 @@ namespace Microsoft.AspNetCore.SignalR.Client
 
             try
             {
-                Closed?.Invoke(ex);
+                Closed?.Invoke(exception);
             }
             catch (Exception ex)
             {
