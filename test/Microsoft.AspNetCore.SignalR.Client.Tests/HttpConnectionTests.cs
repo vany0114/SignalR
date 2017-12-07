@@ -618,13 +618,13 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
             connection.OnReceived(_ => blockReceiveCallbackTcs.Task);
 
-            await connection.StartAsync();
+            await connection.StartAsync().OrTimeout();
             channel.Writer.TryWrite(Array.Empty<byte>());
 
             // Ensure that SignalR isn't blocked by the receive callback
             Assert.False(channel.Reader.TryRead(out var message));
 
-            await connection.DisposeAsync();
+            await connection.DisposeAsync().OrTimeout();
         }
 
         [Fact]
