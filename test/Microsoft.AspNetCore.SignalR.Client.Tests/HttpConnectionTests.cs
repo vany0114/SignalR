@@ -626,7 +626,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
 
                 var blockReceiveCallbackTcs = new TaskCompletionSource<object>();
 
-                var connection = new HttpConnection(new Uri("http://fakeuri.org/"), new TestTransportFactory(mockTransport.Object), loggerFactory: null,
+                var connection = new HttpConnection(new Uri("http://fakeuri.org/"), new TestTransportFactory(mockTransport.Object), loggerFactory,
                     httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
                 connection.OnReceived(_ => blockReceiveCallbackTcs.Task);
 
