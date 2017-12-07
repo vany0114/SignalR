@@ -138,15 +138,19 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
         {
             using (StartLog(out var loggerFactory))
             {
+                var logger = loggerFactory.CreateLogger<HubConnectionTests>();
                 const string originalMessage = "SignalR";
                 var httpConnection = new HttpConnection(new Uri(_serverFixture.Url + "/default"), loggerFactory);
                 var connection = new HubConnection(httpConnection, new JsonHubProtocol(), loggerFactory);
                 var restartTcs = new TaskCompletionSource<object>();
                 connection.Closed += async e =>
                 {
+                    logger.LogInformation("Closed event triggered");
                     if (!restartTcs.Task.IsCompleted)
                     {
+                        logger.LogInformation("Restarting connection");
                         await connection.StartAsync().OrTimeout();
+                        logger.LogInformation("Restarted connection");
                         restartTcs.SetResult(null);
                     }
                 };
@@ -156,8 +160,14 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
                     await connection.StartAsync().OrTimeout();
                     var result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
                     Assert.Equal(originalMessage, result);
+
+                    logger.LogInformation("Stopping connection");
                     await connection.StopAsync().OrTimeout();
+
+                    logger.LogInformation("Waiting for reconnect");
                     await restartTcs.Task.OrTimeout();
+                    logger.LogInformation("Reconnection complete");
+
                     result = await connection.InvokeAsync<string>("Echo", originalMessage).OrTimeout();
                     Assert.Equal(originalMessage, result);
 
