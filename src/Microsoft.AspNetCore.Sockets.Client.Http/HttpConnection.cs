@@ -207,7 +207,14 @@ namespace Microsoft.AspNetCore.Sockets.Client
 
                     if (t.IsFaulted)
                     {
-                        Closed?.Invoke(t.Exception.InnerException);
+                        try
+                        {
+                            Closed?.Invoke(t.Exception.InnerException);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.ErrorDuringClosedEvent(ex);
+                        }
                     }
                     else
                     {

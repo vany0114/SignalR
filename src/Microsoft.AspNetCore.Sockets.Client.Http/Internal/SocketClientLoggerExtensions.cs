@@ -159,6 +159,9 @@ namespace Microsoft.AspNetCore.Sockets.Client.Internal
         private static readonly Action<ILogger, DateTime, string, Exception> _abortingClient =
             LoggerMessage.Define<DateTime, string>(LogLevel.Error, new EventId(21, nameof(AbortingClient)), "{time}: Connection Id {connectionId}: Aborting client.");
 
+        private static readonly Action<ILogger, Exception> _errorDuringClosedEvent =
+            LoggerMessage.Define(LogLevel.Error, new EventId(22, nameof(ErrorDuringClosedEvent)), "An exception was thrown in the handler for the Closed event.");
+
         public static void StartTransport(this ILogger logger, string connectionId, TransferMode transferMode)
         {
             if (logger.IsEnabled(LogLevel.Information))
@@ -541,6 +544,11 @@ namespace Microsoft.AspNetCore.Sockets.Client.Internal
             {
                 _exceptionThrownFromCallback(logger, DateTime.Now, connectionId, callbackName, exception);
             }
+        }
+
+        public static void ErrorDuringClosedEvent(this ILogger logger, Exception exception)
+        {
+            _errorDuringClosedEvent(logger, exception);
         }
     }
 }

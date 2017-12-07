@@ -398,7 +398,14 @@ namespace Microsoft.AspNetCore.SignalR.Client
                 _pendingCalls.Clear();
             }
 
-            Closed?.Invoke(ex);
+            try
+            {
+                Closed?.Invoke(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorDuringClosedEvent(ex);
+            }
         }
 
         private async Task DispatchInvocationAsync(InvocationMessage invocation, CancellationToken cancellationToken)
