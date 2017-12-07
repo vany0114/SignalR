@@ -75,7 +75,7 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
             var mockHttpHandler = new Mock<HttpMessageHandler>();
             mockHttpHandler.Protected()
                 .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
+                .Returns<HttpRequestMessage, CancellationToken>((request, cancellationToken) =>
                 {
                     var mockStream = new Mock<Stream>();
                     mockStream
@@ -91,7 +91,7 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
                         });
                     mockStream.Setup(s => s.CanRead).Returns(true);
 
-                    return new HttpResponseMessage { Content = new StreamContent(mockStream.Object) };
+                    return Task.FromResult(new HttpResponseMessage { Content = new StreamContent(mockStream.Object) });
                 });
 
             Task transportActiveTask;
