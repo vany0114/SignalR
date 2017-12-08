@@ -21,7 +21,7 @@ using Xunit.Abstractions;
 
 namespace Microsoft.AspNetCore.Sockets.Client.Tests
 {
-    public class HttpConnectionTests : LoggedTest
+    public partial class HttpConnectionTests : LoggedTest
     {
         public HttpConnectionTests(ITestOutputHelper output) : base(output)
         {
@@ -60,7 +60,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 {
                     await Task.Yield();
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -90,7 +90,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -141,7 +141,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                     // allow DisposeAsync to continue once we know we are past the connection state check
                     allowDisposeTcs.SetResult(null);
                     await releaseNegotiateTcs.Task;
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -176,7 +176,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 {
                     await Task.Yield();
 
-                    if (IsNegotiateRequest(request))
+                    if (ResponseUtils.IsNegotiateRequest(request))
                     {
                         return failNegotiate
                             ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
@@ -208,7 +208,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -232,7 +232,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    if (IsNegotiateRequest(request))
+                    if (ResponseUtils.IsNegotiateRequest(request))
                     {
                         allowStopTcs.SetResult(null);
                         return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
@@ -268,7 +268,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    if (IsNegotiateRequest(request))
+                    if (ResponseUtils.IsNegotiateRequest(request))
                     {
                         return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
                     }
@@ -313,7 +313,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    if (IsNegotiateRequest(request))
+                    if (ResponseUtils.IsNegotiateRequest(request))
                     {
                         return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
                     }
@@ -346,7 +346,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    if (IsNegotiateRequest(request))
+                    if (ResponseUtils.IsNegotiateRequest(request))
                     {
                         return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
                     }
@@ -391,7 +391,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -416,7 +416,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -453,7 +453,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
 
                     return request.Method == HttpMethod.Get
                         ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
-                        : IsNegotiateRequest(request)
+                        : ResponseUtils.IsNegotiateRequest(request)
                             ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                             : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -493,7 +493,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -541,7 +541,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -602,14 +602,14 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                     .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                     {
                         await Task.Yield();
-                        return IsNegotiateRequest(request)
+                        return ResponseUtils.IsNegotiateRequest(request)
                             ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                             : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                     });
 
                 var mockTransport = new Mock<ITransport>();
                 Channel<byte[], SendMessage> channel = null;
-                mockTransport.Setup(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>()))
+                mockTransport.Setup(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>(), It.IsAny<IConnection>()))
                     .Returns<Uri, Channel<byte[], SendMessage>, TransferMode, string>((url, c, transferMode, connectionId) =>
                     {
                         logger.LogInformation("Transport started");
@@ -660,7 +660,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -719,7 +719,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 {
                     await Task.Yield();
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -757,7 +757,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    if (IsNegotiateRequest(request))
+                    if (ResponseUtils.IsNegotiateRequest(request))
                     {
                         return ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse());
                     }
@@ -812,7 +812,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                         content = "T2:T:42;";
                     }
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK, content);
                 });
@@ -839,7 +839,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 {
                     await Task.Yield();
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : request.Method == HttpMethod.Post
                             ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
@@ -873,7 +873,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                         content = "42";
                     }
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK, content);
                 });
@@ -928,7 +928,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                         content = "42";
                     }
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK, content);
                 });
@@ -991,7 +991,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                         content = "42";
                     }
 
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK, content);
                 });
@@ -1049,7 +1049,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
 
                     return request.Method == HttpMethod.Get
                         ? ResponseUtils.CreateResponse(HttpStatusCode.InternalServerError)
-                        : IsNegotiateRequest(request)
+                        : ResponseUtils.IsNegotiateRequest(request)
                             ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                             : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -1179,7 +1179,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -1248,7 +1248,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
                 {
                     await Task.Yield();
-                    return IsNegotiateRequest(request)
+                    return ResponseUtils.IsNegotiateRequest(request)
                         ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
                         : ResponseUtils.CreateResponse(HttpStatusCode.OK);
                 });
@@ -1264,12 +1264,6 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
             var exception = new Exception("Whoops!");
             await connection.AbortAsync(exception).OrTimeout();
             Assert.Same(exception, await closeTcs.Task.OrTimeout());
-        }
-
-        private bool IsNegotiateRequest(HttpRequestMessage request)
-        {
-            return request.Method == HttpMethod.Post &&
-                new UriBuilder(request.RequestUri).Path.EndsWith("/negotiate");
         }
     }
 }

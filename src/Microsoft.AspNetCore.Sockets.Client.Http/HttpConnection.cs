@@ -182,6 +182,12 @@ namespace Microsoft.AspNetCore.Sockets.Client
 
                 _ = Input.Completion.ContinueWith(async t =>
                 {
+                    // Grab the exception and then clear it.
+                    // See comment at AbortAsync for more discussion on the thread-safety
+                    // StartAsync can't be called until the ChangeState below, so we're OK.
+                    var abortException = _abortException;
+                    _abortException = null;
+
                     // There is an inherent race between receive and close. Removing the last message from the channel
                     // makes Input.Completion task completed and runs this continuation. We need to await _receiveLoopTask
                     // to make sure that the message removed from the channel is processed before we drain the queue.
@@ -193,6 +199,7 @@ namespace Microsoft.AspNetCore.Sockets.Client
                     await _receiveLoopTask;
 
                     _logger.DrainEvents(_connectionId);
+                    await _eventQueue.Drain();
 
                     await Task.WhenAny(_eventQueue.Drain().NoThrow(), Task.Delay(_eventQueueDrainTimeout));
 
@@ -200,24 +207,20 @@ namespace Microsoft.AspNetCore.Sockets.Client
 
                     // At this point the connection can be either in the Connected or Disposed state. The state should be changed
                     // to the Disconnected state only if it was in the Connected state.
+                    // From this point on, StartAsync can be called at any time.
                     ChangeState(from: ConnectionState.Connected, to: ConnectionState.Disconnected);
 
                     _closeTcs.SetResult(null);
 
                     if (t.IsFaulted)
                     {
-                        try
-                        {
-                            Closed?.Invoke(t.Exception.InnerException);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.ErrorDuringClosedEvent(ex);
-                        }
+                        Closed?.Invoke(t.Exception.InnerException);
                     }
                     else
                     {
-                        Closed?.Invoke(null);
+                        // Call the closed event. If there was an abort exception, it will be flowed forward
+                        // However, if there wasn't, this will just be null and we're good
+                        Closed?.Invoke(abortException);
                     }
                 });
 
@@ -447,9 +450,23 @@ namespace Microsoft.AspNetCore.Sockets.Client
             }
         }
 
+        // AbortAsync creates a few thread-safety races that we are OK with.
+        //  1. If the transport shuts down gracefully after AbortAsync is called but BEFORE _abortException is called, then the
+        //     Closed event will not receive the Abort exception. This is OK because technically the transport was shut down gracefully
+        //     before it was aborted
+        //  2. If the transport is closed gracefully and then AbortAsync is called before it captures the _abortException value
+        //     the graceful shutdown could be turned into an abort. However, again, this is an inherent race between two different conditions:
+        //     The transport shutting down because the server went away, and the user requesting the Abort
+        //  3. Finally, because this is an instance field, there is a possible race around accidentally re-using _abortException in the restarted
+        //     connection. The scenario here is: AbortAsync(someException); StartAsync(); CloseAsync(); Where the _abortException value from the
+        //     first AbortAsync call is still set at the time CloseAsync gets to calling the Closed event. However, this can't happen because the
+        //     StartAsync method can't be called until the connection state is changed to Disconnected, which happens AFTER the close code
+        //     captures and resets _abortException.
         public async Task AbortAsync(Exception ex) => await StopAsyncCore(ex ?? throw new ArgumentNullException(nameof(ex))).ForceAsync();
 
-        public async Task StopAsync()
+        public async Task StopAsync() => await StopAsyncCore(exception: null).ForceAsync();
+
+        private async Task StopAsyncCore(Exception exception)
         {
             lock (_stateChangeLock)
             {
@@ -459,19 +476,12 @@ namespace Microsoft.AspNetCore.Sockets.Client
                 }
             }
 
-            await StopAsyncCore(exception: null).ForceAsync();
-        }
-
-        private async Task StopAsyncCore(Exception exception)
-        {
             // Note that this method can be called at the same time when the connection is being closed from the server
             // side due to an error. We are resilient to this since we merely try to close the channel here and the
             // channel can be closed only once. As a result the continuation that does actual job and raises the Closed
             // event runs always only once.
 
-            // Similarly, we set an "abort exception" if there is one here. However, if the channel is completed before
-            // this is set, but after the "AbortAsync" method was called, that's OK. It means the transport shutdown "normally"
-            // before the Abort was processed
+            // See comment at AbortAsync for more discussion on the thread-safety of this.
             _abortException = exception;
 
             _logger.StoppingClient(_connectionId);
