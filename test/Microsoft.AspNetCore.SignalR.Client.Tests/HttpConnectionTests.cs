@@ -147,7 +147,19 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 });
 
             var transport = new Mock<ITransport>();
-            transport.Setup(t => t.StopAsync()).Returns(async () => { await releaseDisposeTcs.Task; });
+            Channel<byte[], SendMessage> channel = null;
+            transport.SetupGet(t => t.Mode).Returns(TransferMode.Text);
+            transport.Setup(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>(), It.IsAny<IConnection>()))
+                .Returns<Uri, Channel<byte[], SendMessage>, TransferMode, string, IConnection>((_, c, __, ___, ____) =>
+                {
+                    channel = c;
+                    return Task.CompletedTask;
+                });
+            transport.Setup(t => t.StopAsync()).Returns(async () =>
+            {
+                await releaseDisposeTcs.Task;
+                channel.Writer.TryComplete();
+            });
             var connection = new HttpConnection(new Uri("http://fakeuri.org/"), new TestTransportFactory(transport.Object), loggerFactory: null,
                 httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
 
@@ -161,8 +173,6 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
             await startTask.OrTimeout();
             releaseDisposeTcs.SetResult(null);
             await disposeTask.OrTimeout();
-
-            transport.Verify(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>(), It.IsAny<IConnection>()), Times.Never);
         }
 
         [Fact]
@@ -485,54 +495,6 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
         }
 
         [Fact]
-        public async Task ReceivedCallbackNotRaisedAfterConnectionIsDisposed()
-        {
-            var mockHttpHandler = new Mock<HttpMessageHandler>();
-            mockHttpHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-                .Returns<HttpRequestMessage, CancellationToken>(async (request, cancellationToken) =>
-                {
-                    await Task.Yield();
-                    return ResponseUtils.IsNegotiateRequest(request)
-                        ? ResponseUtils.CreateResponse(HttpStatusCode.OK, ResponseUtils.CreateNegotiationResponse())
-                        : ResponseUtils.CreateResponse(HttpStatusCode.OK);
-                });
-
-            var mockTransport = new Mock<ITransport>();
-            Channel<byte[], SendMessage> channel = null;
-            mockTransport.Setup(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>(), It.IsAny<IConnection>()))
-                .Returns<Uri, Channel<byte[], SendMessage>, TransferMode, string, IConnection>((url, c, transferMode, connectionId, _) =>
-                {
-                    channel = c;
-                    return Task.CompletedTask;
-                });
-            mockTransport.Setup(t => t.StopAsync())
-                .Returns(() =>
-                {
-                    // The connection is now in the Disconnected state so the Received event for
-                    // this message should not be raised
-                    channel.Writer.TryWrite(Array.Empty<byte>());
-                    channel.Writer.TryComplete();
-                    return Task.CompletedTask;
-                });
-            mockTransport.SetupGet(t => t.Mode).Returns(TransferMode.Text);
-
-            var connection = new HttpConnection(new Uri("http://fakeuri.org/"), new TestTransportFactory(mockTransport.Object), loggerFactory: null,
-                httpOptions: new HttpOptions { HttpMessageHandler = mockHttpHandler.Object });
-
-            var onReceivedInvoked = false;
-            connection.OnReceived(_ =>
-            {
-                onReceivedInvoked = true;
-                return Task.CompletedTask;
-            });
-
-            await connection.StartAsync();
-            await connection.DisposeAsync();
-            Assert.False(onReceivedInvoked);
-        }
-
-        [Fact]
         public async Task EventsAreNotRunningOnMainLoop()
         {
             var mockHttpHandler = new Mock<HttpMessageHandler>();
@@ -610,7 +572,7 @@ namespace Microsoft.AspNetCore.Sockets.Client.Tests
                 var mockTransport = new Mock<ITransport>();
                 Channel<byte[], SendMessage> channel = null;
                 mockTransport.Setup(t => t.StartAsync(It.IsAny<Uri>(), It.IsAny<Channel<byte[], SendMessage>>(), It.IsAny<TransferMode>(), It.IsAny<string>(), It.IsAny<IConnection>()))
-                    .Returns<Uri, Channel<byte[], SendMessage>, TransferMode, string>((url, c, transferMode, connectionId) =>
+                    .Returns<Uri, Channel<byte[], SendMessage>, TransferMode, string, IConnection>((url, c, transferMode, connectionId, _) =>
                     {
                         logger.LogInformation("Transport started");
                         channel = c;

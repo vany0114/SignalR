@@ -37,6 +37,9 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
         public ChannelReader<byte[]> SentMessages => _sentMessages.Reader;
         public ChannelWriter<byte[]> ReceivedMessages => _receivedMessages.Writer;
 
+        private bool _closed;
+        private object _closedLock = new object();
+
         private readonly List<ReceiveCallback> _callbacks = new List<ReceiveCallback>();
 
         public IFeatureCollection Features { get; } = new FeatureCollection();
@@ -50,22 +53,12 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
         public Task AbortAsync(Exception ex) => DisposeCoreAsync(ex);
         public Task DisposeAsync() => DisposeCoreAsync();
 
-        public Task StopAsync()
-        {
-            return Task.FromException(new NotSupportedException());
-        }
+        // TestConnection isn't restartable
+        public Task StopAsync() => DisposeAsync();
 
         private Task DisposeCoreAsync(Exception ex = null)
         {
-            if (ex == null)
-            {
-                _disposed.TrySetResult(null);
-            }
-            else
-            {
-                _disposed.TrySetException(ex);
-            }
-
+            TriggerClosed(ex);
             _receiveShutdownToken.Cancel();
             return _receiveLoop;
         }
@@ -149,16 +142,28 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
                         }
                     }
                 }
-                Closed?.Invoke(null);
+                TriggerClosed();
             }
             catch (OperationCanceledException)
             {
                 // Do nothing, we were just asked to shut down.
-                Closed?.Invoke(null);
+                TriggerClosed();
             }
             catch (Exception ex)
             {
-                Closed?.Invoke(ex);
+                TriggerClosed(ex);
+            }
+        }
+
+        private void TriggerClosed(Exception ex = null)
+        {
+            lock (_closedLock)
+            {
+                if (!_closed)
+                {
+                    _closed = true;
+                    Closed?.Invoke(ex);
+                }
             }
         }
 

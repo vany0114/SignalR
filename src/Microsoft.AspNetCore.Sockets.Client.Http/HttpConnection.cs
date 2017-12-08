@@ -199,7 +199,6 @@ namespace Microsoft.AspNetCore.Sockets.Client
                     await _receiveLoopTask;
 
                     _logger.DrainEvents(_connectionId);
-                    await _eventQueue.Drain();
 
                     await Task.WhenAny(_eventQueue.Drain().NoThrow(), Task.Delay(_eventQueueDrainTimeout));
 
@@ -321,7 +320,11 @@ namespace Microsoft.AspNetCore.Sockets.Client
                 await _transport.StartAsync(connectUrl, applicationSide, GetTransferMode(), _connectionId, this);
 
                 // actual transfer mode can differ from the one that was requested so set it on the feature
-                Debug.Assert(_transport.Mode.HasValue, "transfer mode not set after transport started");
+                if(!_transport.Mode.HasValue)
+                {
+                    // This can happen with custom transports so it should be an exception, not an assert.
+                    throw new InvalidOperationException("Transport was expected to set the Mode property after StartAsync, but it has not been set.");
+                }
                 SetTransferMode(_transport.Mode.Value);
             }
             catch (Exception ex)
@@ -472,6 +475,7 @@ namespace Microsoft.AspNetCore.Sockets.Client
             {
                 if (!(_connectionState == ConnectionState.Connecting || _connectionState == ConnectionState.Connected))
                 {
+                    _logger.SkippingStop(_connectionId);
                     return;
                 }
             }
@@ -521,15 +525,18 @@ namespace Microsoft.AspNetCore.Sockets.Client
 
         private async Task DisposeAsyncCore()
         {
+            // This will no-op if we're already stopped
+            await StopAsyncCore(exception: null);
+
             if (ChangeState(to: ConnectionState.Disposed) == ConnectionState.Disposed)
             {
+                _logger.SkippingDispose(_connectionId);
+
                 // the connection was already disposed
                 return;
             }
 
             _logger.DisposingClient(_connectionId);
-
-            await StopAsyncCore(exception: null);
 
             _httpClient?.Dispose();
         }
@@ -590,6 +597,7 @@ namespace Microsoft.AspNetCore.Sockets.Client
                     _connectionState = to;
                 }
 
+                _logger.ConnectionStateChanged(_connectionId, state, to);
                 return state;
             }
         }
@@ -600,11 +608,13 @@ namespace Microsoft.AspNetCore.Sockets.Client
             {
                 var state = _connectionState;
                 _connectionState = to;
+                _logger.ConnectionStateChanged(_connectionId, state, to);
                 return state;
             }
         }
 
-        private enum ConnectionState
+        // Internal because it's used by logging to avoid ToStringing prematurely.
+        internal enum ConnectionState
         {
             Disconnected,
             Connecting,

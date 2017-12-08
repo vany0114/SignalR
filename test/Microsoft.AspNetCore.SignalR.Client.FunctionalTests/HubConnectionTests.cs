@@ -275,6 +275,11 @@ namespace Microsoft.AspNetCore.SignalR.Client.FunctionalTests
                     await connection.DisposeAsync().OrTimeout();
                     await closeTcs.Task.OrTimeout();
                 }
+                catch (Exception ex)
+                {
+                    loggerFactory.CreateLogger<HubConnectionTests>().LogError(ex, "{ExceptionType} during test: {Message}", ex.GetType().Name, ex.Message);
+                    throw;
+                }
                 finally
                 {
                     await connection.DisposeAsync().OrTimeout();

@@ -162,6 +162,15 @@ namespace Microsoft.AspNetCore.Sockets.Client.Internal
         private static readonly Action<ILogger, Exception> _errorDuringClosedEvent =
             LoggerMessage.Define(LogLevel.Error, new EventId(22, nameof(ErrorDuringClosedEvent)), "An exception was thrown in the handler for the Closed event.");
 
+        private static readonly Action<ILogger, DateTime, string, Exception> _skippingStop =
+            LoggerMessage.Define<DateTime, string>(LogLevel.Debug, new EventId(23, nameof(SkippingStop)), "{time}: Connection Id {connectionId}: Skipping stop, connection is already stopped.");
+
+        private static readonly Action<ILogger, DateTime, string, Exception> _skippingDispose =
+            LoggerMessage.Define<DateTime, string>(LogLevel.Debug, new EventId(24, nameof(SkippingDispose)), "{time}: Connection Id {connectionId}: Skipping dispose, connection is already disposed.");
+
+        private static readonly Action<ILogger, DateTime, string, string, string, Exception> _connectionStateChanged =
+            LoggerMessage.Define<DateTime, string, string, string>(LogLevel.Debug, new EventId(25, nameof(ConnectionStateChanged)), "{time}: Connection Id {connectionId}: Connection state changed from {previousState} to {newState}.");
+
         public static void StartTransport(this ILogger logger, string connectionId, TransferMode transferMode)
         {
             if (logger.IsEnabled(LogLevel.Information))
@@ -535,6 +544,30 @@ namespace Microsoft.AspNetCore.Sockets.Client.Internal
             if (logger.IsEnabled(LogLevel.Information))
             {
                 _disposingClient(logger, DateTime.Now, connectionId, null);
+            }
+        }
+
+        public static void SkippingDispose(this ILogger logger, string connectionId)
+        {
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                _skippingDispose(logger, DateTime.Now, connectionId, null);
+            }
+        }
+
+        public static void ConnectionStateChanged(this ILogger logger, string connectionId, HttpConnection.ConnectionState previousState, HttpConnection.ConnectionState newState)
+        {
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                _connectionStateChanged(logger, DateTime.Now, connectionId, previousState.ToString(), newState.ToString(), null);
+            }
+        }
+
+        public static void SkippingStop(this ILogger logger, string connectionId)
+        {
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                _skippingStop(logger, DateTime.Now, connectionId, null);
             }
         }
 
